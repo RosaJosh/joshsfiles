@@ -1,54 +1,35 @@
-import io
-import os
 import subprocess
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
-from googleapiclient.http import MediaIoBaseDownload
+import sys
+import urllib.request
+import os
+import json
 
+def install_and_run_py_script():
+    # Install Python 3 (Windows)
+    if sys.version_info < (3, 0):
+        print('Python 3 not detected. Installing...')
+        subprocess.call(['powershell.exe', 'Start-Process', 'python', '-ArgumentList', '/quiet', '-Wait', '-NoNewWindow', '-PassThru', '-Verb', 'runas'])
+        print('Python 3 installation complete.')
 
-def download_and_install_files_from_folder(folder_id):
-    try:
-        creds = service_account.Credentials.from_service_account_file('C:\\Users\\joshr\\Downloads\\credentials.json')
+    # Authenticate with the Google Drive API using JSON source file
+    creds = None
+    if os.path.exists('credentials.json'):
+        with open('credentials.json', 'r') as f:
+            creds = json.load(f)
+    
+    if not creds:
+        print('Google Drive API credentials not found. Please download the JSON source file and place it in the current directory.')
+        return
+    
+    from google.oauth2.credentials import Credentials
+    creds = Credentials.from_authorized_user_info(info=creds)
 
-        service = build('drive', 'v3', credentials=creds)
+    # Download and run the Python script from GitHub
+    url = 'https://raw.githubusercontent.com/11josh69/joshsfiles/main/autopropogate.py'
+    filename = 'autopropogate.py'
 
-        query = f"'{folder_id}' in parents"
-        results = service.files().list(q=query, fields="nextPageToken, files(id, name, mimeType)").execute()
-        items = results.get('files', [])
+    print(f'Downloading {filename} from {url}...')
+    urllib.request.urlretrieve(url, filename)
 
-        if not items:
-            print('No files found.')
-        else:
-            print('Files:')
-            for item in items:
-                if item['mimeType'] != 'application/vnd.google-apps.folder':
-                    request = service.files().get_media(fileId=item['id'])
-                    file = io.BytesIO()
-                    downloader = MediaIoBaseDownload(file, request)
-                    done = False
-                    while done is False:
-                        status, done = downloader.next_chunk()
-                        print(f"Downloaded {int(status.progress() * 100)}.")
-                    
-                    file.seek(0)
-                    file_name = item['name']
-                    with open(file_name, 'wb') as f:
-                        f.write(file.read())
-                    print(f"Downloaded: {file_name}")
-
-                    if file_name.endswith('.exe'):
-                        print(f"Installing {file_name}...")
-                        subprocess.run([file_name], check=True)
-                        print(f"Installed: {file_name}")
-                else:
-                    print(f"Skipping folder: {item['name']}")
-
-    except HttpError as error:
-        print(f"An error occurred: {error}")
-        return None
-
-
-if __name__ == '__main__':
-    folder_id = '13L3kOnPyet5_1PhCooV0Gpi4ZvurWYG4'  # The folder ID from the provided link.
-    download_and_install_files_from_folder(folder_id)
+    print(f'Running {filename}...')
+    subprocess.call(['python', filename])
